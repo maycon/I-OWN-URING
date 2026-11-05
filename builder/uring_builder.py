@@ -955,6 +955,10 @@ def main() -> None:
     log(f'[*] C2        : {mission["config"]["c2_ip"]}:{mission["config"]["c2_port"]}',
         args.quiet)
     log(f'[*] Ops       : {len(mission["ops"])}', args.quiet)
+    kern_req = mission.get('requires_kernel')
+    if kern_req:
+        log(f'[*] Kernel req: >= {kern_req} (mission YAML — check the TARGET host)',
+            args.quiet)
 
     # Render Layer 2 + data section
     mission_code, data_asm = render_layer2(mission)
