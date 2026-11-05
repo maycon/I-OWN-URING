@@ -251,6 +251,12 @@ _delta:
     inc dword [r10]                          ; commit
     call _wait_cqe_ok
 
+    ; Mission complete. The helpers below sit between the last op and
+    ; _exit_ok: falling through would land in _get_sqe, whose ret pops
+    ; the kernel-written params u64 at [r13] as a return address (SIGSEGV
+    ; at 0x0000000200000001 with entries=1/cq=2 — observed on 6.14).
+    jmp _exit_ok
+
 ; ----------------------------------------------------------------
 ; _get_sqe — zero the (single) SQE slot, rax = SQE ptr.
 ; entries=1 → slot index is structurally 0; the SQ array is kernel-prepared
