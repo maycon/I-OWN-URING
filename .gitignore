@@ -1,0 +1,51 @@
+# Build artifacts — never commit compiled binaries or assembled payloads.
+
+# --- Compiled PoCs / tools (make poc, make inject) ---
+poc/hello_uring
+poc/file_exfil_uring
+poc/sqpoll_uring
+testing/runner
+testing/injector/inject
+*.o
+*.a
+
+# --- Assembled shellcode payloads (nasm output, builder output) ---
+# Every .bin in this repo is a generated payload; never commit them.
+*.bin
+
+# --- Generated C headers (extract.py / uring_builder.py emit these) ---
+shellcode.h
+
+# --- Test / EDR matrix output (run_matrix.sh) ---
+testing/results/edr_matrix.md
+# NOTE: testing/results/falco_demo.cast and falco_edr_comparison.md are
+# deliberate evidence referenced by README.md and paper/ — keep them tracked.
+
+# --- Logs / crash dumps ---
+*.log
+core
+core.*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Claude Code local settings ---
+.claude/settings.local.json
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- Debugger history ---
+.gdb_history

