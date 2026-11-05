@@ -5,6 +5,7 @@ from pathlib import Path
 
 def find_header(binary_path: Path) -> Path:
     candidates = [
+        binary_path.with_suffix('.h'),      # e.g. combined/shellcode.h
         binary_path.parent / 'shellcode.h',
         Path('shellcode.h'),
         Path('combined/shellcode.h'),
@@ -31,8 +32,36 @@ def main():
         sys.exit(1)
 
     header = header_path.read_text()
-    ip_off   = int(re.search(r'CONFIG_IP_OFFSET\s+(\d+)', header).group(1))
-    port_off = int(re.search(r'CONFIG_PORT_OFFSET\s+(\d+)', header).group(1))
+
+    size_m = re.search(r'SHELLCODE_SIZE\s+(\d+)', header)
+    if size_m and int(size_m.group(1)) != len(data):
+        print(
+            f"ERROR: header {header_path} describes a {size_m.group(1)}-byte "
+            f"binary, but {binary_path} is {len(data)} bytes — wrong header "
+            f"for this payload. Regenerate it with extract.py/builder first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    ip_m = re.search(r'CONFIG_IP_OFFSET\s+(\d+)', header)
+    port_m = re.search(r'CONFIG_PORT_OFFSET\s+(\d+)', header)
+    if not ip_m or not port_m:
+        print(
+            f"ERROR: {header_path} has no CONFIG_IP_OFFSET/CONFIG_PORT_OFFSET "
+            f"defines. Run 'make -C shellcode' (extract.py) or the builder "
+            f"to regenerate it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    ip_off, port_off = int(ip_m.group(1)), int(port_m.group(1))
+
+    if ip_off + 4 > len(data) or port_off + 2 > len(data):
+        print(
+            f"ERROR: header offsets (ip={ip_off}, port={port_off}) exceed "
+            f"{binary_path} size ({len(data)} bytes).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     data[ip_off:ip_off+4] = bytes(int(x) for x in args.ip.split('.'))
     data[port_off:port_off+2] = struct.pack('>H', args.port)

