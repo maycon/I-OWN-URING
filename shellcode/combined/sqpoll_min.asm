@@ -329,8 +329,11 @@ _exit:
     pop rax                          ; group exit can stall on the ring's
     syscall                          ; borrowed-mm kthread bookkeeping
     xor edi, edi                     ; exit status 0 (or 1 if _fail set it)
-    push 0xE8
-    pop rax                          ; exit_group — NOT sys_exit(0x3C): the
+    push 0xE7
+    pop rax                          ; SYS_exit_group = 231 — NOT 232
+                                     ; (0xE8 is epoll_wait; the old value
+                                     ; looped close/epoll_wait forever).
+                                     ; exit_group, NOT sys_exit(0x3C): the
                                      ; SQPOLL ring's io_wq workers share
                                      ; this thread group and never run
                                      ; again, so a per-thread exit never
