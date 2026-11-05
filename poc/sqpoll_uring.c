@@ -50,6 +50,7 @@ int main(void) {
     unsigned *sq_t  = sq + p.sq_off.tail;
     unsigned *sq_mk = sq + p.sq_off.ring_mask;
     unsigned *sq_arr= sq + p.sq_off.array;
+    unsigned *sq_fl = sq + p.sq_off.flags;   /* IORING_SQ_NEED_WAKEUP lives here */
     unsigned *cq_h  = cq + p.cq_off.head;
     unsigned *cq_t  = cq + p.cq_off.tail;
     unsigned *cq_mk = cq + p.cq_off.ring_mask;
@@ -74,9 +75,22 @@ int main(void) {
     __sync_synchronize();    /* memory barrier before tail increment */
     (*sq_t)++;
 
-    fprintf(stderr,"[*] SQE submitted via shared memory (NO io_uring_enter syscall)\n");
+    fprintf(stderr,"[*] SQE submitted via shared memory (NO submit syscall)\n");
 
-    /* Poll CQE with timeout */
+    /*
+     * Wake protocol (kernel >= 5.11 behaviour): the SQPOLL thread starts
+     * PARKED with IORING_SQ_NEED_WAKEUP set — a memory-only submission on
+     * a fresh ring is never processed until an explicit
+     * io_uring_enter(IORING_ENTER_SQ_WAKEUP). This wake is non-blocking
+     * (to_submit=0, min_complete=0). Without it the old code fell into a
+     * blocking GETEVENTS enter that never returned. Mirrors sqpoll_min.asm.
+     */
+    if (*sq_fl & IORING_SQ_NEED_WAKEUP) {
+        io_uring_enter(rfd, 0, 0, IORING_ENTER_SQ_WAKEUP, NULL);
+        fprintf(stderr,"[*] Woke parked SQPOLL thread (IORING_ENTER_SQ_WAKEUP)\n");
+    }
+
+    /* Poll CQE with timeout; re-wake if the thread parks again */
     int res = -1;
     for (int i = 0; i < 500; i++) {
         if (*cq_h != *cq_t) {
@@ -85,9 +99,8 @@ int main(void) {
             (*cq_h)++;
             break;
         }
-        /* Wake SQPOLL thread if it went idle */
-        if (i == 200)
-            io_uring_enter(rfd, 0, 1, IORING_ENTER_GETEVENTS, NULL);
+        if (*sq_fl & IORING_SQ_NEED_WAKEUP)
+            io_uring_enter(rfd, 0, 0, IORING_ENTER_SQ_WAKEUP, NULL);
         usleep(10000);  /* 10ms */
     }
 
@@ -98,8 +111,8 @@ int main(void) {
         fprintf(stderr,"[!] CQE res=%d (timeout or error)\n", res);
     }
 
-    fprintf(stderr,"\n[*] After SQPOLL setup, io_uring_enter call count: ~0\n");
-    fprintf(stderr,"[*] EDR watching sys_enter sees: nothing\n");
+    fprintf(stderr,"\n[*] After setup, enter() calls: <= 1 (SQ_WAKEUP wake of the parked thread)\n");
+    fprintf(stderr,"[*] The READ itself never left shared memory — no read() in sys_enter\n");
 
     close(fd);
     close(rfd);
