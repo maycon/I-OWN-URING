@@ -108,20 +108,20 @@ IORING_OFF_SQES    = 0x10000000
 
 ### io_uring_params offsets for sq_off / cq_off
 ```
-params.sq_off.head    = params+36
-params.sq_off.tail    = params+40
-params.sq_off.ring_mask   = params+44
-params.sq_off.ring_entries= params+48
-params.sq_off.flags   = params+52
-params.sq_off.dropped = params+56
-params.sq_off.array   = params+60
+params.sq_off.head    = params+40
+params.sq_off.tail    = params+44
+params.sq_off.ring_mask   = params+48
+params.sq_off.ring_entries= params+52
+params.sq_off.flags   = params+56
+params.sq_off.dropped = params+60
+params.sq_off.array   = params+64
 
-params.cq_off.head    = params+64
-params.cq_off.tail    = params+68
-params.cq_off.ring_mask   = params+72
-params.cq_off.ring_entries= params+76
-params.cq_off.overflow= params+80
-params.cq_off.cqes    = params+84
+params.cq_off.head    = params+80
+params.cq_off.tail    = params+84
+params.cq_off.ring_mask   = params+88
+params.cq_off.ring_entries= params+92
+params.cq_off.overflow= params+96
+params.cq_off.cqes    = params+100
 ```
 
 ## Common Mistakes to Avoid

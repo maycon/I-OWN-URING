@@ -124,9 +124,10 @@ Sequence:
 6. `mmap(0, sqes_size, …, IORING_OFF_SQES)`
 7. Store all internal pointers in register-resident state
 
-`params` struct: 104 bytes, zero-initialised at data section.
-`io_sqring_offsets` starts at byte 36 of params.
-`io_cqring_offsets` starts at byte 64 of params.
+`params` struct: 120 bytes (zero-initialised at data section; the code
+zeroes the whole stack frame, which covers it).
+`io_sqring_offsets` starts at byte 40 of params.
+`io_cqring_offsets` starts at byte 80 of params.
 
 ### layer1_runtime.asm — SQE/CQE Engine (~400 bytes target)
 
