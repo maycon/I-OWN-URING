@@ -13,10 +13,27 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
+#include <sys/utsname.h>
 #include <linux/io_uring.h>
 
 #define __NR_io_uring_setup  425
 #define __NR_io_uring_enter  426
+
+/* AGENTS.md rule: runtime kernel check with a clear error message. */
+static int require_kernel(int major, int minor, const char *feature) {
+    struct utsname u = {0};
+    int a = 0, b = 0;
+    if (uname(&u) != 0 || sscanf(u.release, "%d.%d", &a, &b) < 2) {
+        fprintf(stderr, "[-] cannot determine kernel version\n");
+        return 0;
+    }
+    if (a > major || (a == major && b >= minor))
+        return 1;
+    fprintf(stderr,
+            "[-] needs kernel >= %d.%d for %s — this kernel is %s\n",
+            major, minor, feature, u.release);
+    return 0;
+}
 
 static int io_uring_setup(unsigned entries, struct io_uring_params *p) {
     return syscall(__NR_io_uring_setup, entries, p);
@@ -39,6 +56,9 @@ struct ring {
 int main(void) {
     struct ring r = {0};
     char buf[256] = {0};
+
+    if (!require_kernel(5, 1, "io_uring"))
+        return 1;
 
     r.fd = io_uring_setup(8, &r.params);
     if (r.fd < 0) { perror("io_uring_setup"); return 1; }

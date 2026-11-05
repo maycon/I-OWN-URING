@@ -15,11 +15,28 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
+#include <sys/utsname.h>
 #include <stdint.h>
 #include <linux/io_uring.h>
 
 #define __NR_io_uring_setup  425
 #define __NR_io_uring_enter  426
+
+/* AGENTS.md rule: runtime kernel check with a clear error message. */
+static int require_kernel(int major, int minor, const char *feature) {
+    struct utsname u = {0};
+    int a = 0, b = 0;
+    if (uname(&u) != 0 || sscanf(u.release, "%d.%d", &a, &b) < 2) {
+        fprintf(stderr, "[-] cannot determine kernel version\n");
+        return 0;
+    }
+    if (a > major || (a == major && b >= minor))
+        return 1;
+    fprintf(stderr,
+            "[-] needs kernel >= %d.%d for %s — this kernel is %s\n",
+            major, minor, feature, u.release);
+    return 0;
+}
 
 static int io_uring_setup(unsigned e, struct io_uring_params *p) {
     return syscall(__NR_io_uring_setup, e, p);
@@ -29,6 +46,9 @@ static int io_uring_enter(int fd, unsigned s, unsigned m, unsigned f, void *g) {
 }
 
 int main(void) {
+    if (!require_kernel(5, 11, "unprivileged SQPOLL (IORING_SETUP_SQPOLL)"))
+        return 1;
+
     struct io_uring_params p = {0};
     p.flags = IORING_SETUP_SQPOLL;
     p.sq_thread_idle = 2000;  /* 2s idle before thread sleeps */
