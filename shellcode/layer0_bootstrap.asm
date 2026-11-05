@@ -64,7 +64,7 @@ BITS 64
 %define SQ_ADDR     16
 %define SQ_LEN      24
 %define SQ_OPFLAGS  28
-%define SQ_UDATA    40
+%define SQ_UDATA    32      ; u64 user_data — +32 (NOT +40, which is buf_index)
 %define CQ_RES      8
 
 ; ---- Stack frame layout (r13 = frame base) ----

