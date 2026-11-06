@@ -106,6 +106,56 @@ static int scan_offsets(const uint8_t *data, size_t size,
 }
 
 /*
+ * Try to load config offsets from the header written next to the
+ * payload (<bin>.h — emitted by extract.py and uring_builder.py).
+ * Only trusted when its SHELLCODE_SIZE matches the loaded payload:
+ * that pairing is what makes offsets from a NON-default build usable
+ * (e.g. --port 19444 — its config bytes are not the default sentinel
+ * the scanner looks for). Returns 1 and fills ip_off/port_off.
+ */
+static int header_offsets_for(const char *binpath,
+                              size_t size, int *ip_off, int *port_off)
+{
+    char hpath[4352];
+    snprintf(hpath, sizeof(hpath), "%s", binpath);
+    char *dot = strrchr(hpath, '.');
+    char *slash = strrchr(hpath, '/');
+    if (dot && (!slash || dot > slash))
+        strcpy(dot, ".h");
+    else
+        strcat(hpath, ".h");
+
+    FILE *f = fopen(hpath, "r");
+    if (!f)
+        return 0;
+
+    int hsize = -1, ip = -1, port = -1, v;
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "#define SHELLCODE_SIZE %d", &v) == 1)
+            hsize = v;
+        else if (sscanf(line, "#define CONFIG_IP_OFFSET %d", &v) == 1)
+            ip = v;
+        else if (sscanf(line, "#define CONFIG_PORT_OFFSET %d", &v) == 1)
+            port = v;
+    }
+    fclose(f);
+
+    if (hsize != (int)size || ip < 0 || port < 0 ||
+        (size_t)ip + 4 > size || (size_t)port + 2 > size) {
+        fprintf(stderr,
+                "[!] Header %s does not match this payload — ignoring\n",
+                hpath);
+        return 0;
+    }
+
+    *ip_off = ip;
+    *port_off = port;
+    fprintf(stderr, "[*] Config offsets from header %s\n", hpath);
+    return 1;
+}
+
+/*
  * True when the default config sentinel sits exactly at the given
  * offsets — used to sanity-check header-baked offsets against the
  * payload actually being run (the header describes whichever binary
@@ -197,37 +247,40 @@ int main(int argc, char *argv[])
     uint8_t *sc = load_file(argv[1], &sc_size);
     fprintf(stderr, "[*] Loaded %zu bytes from %s\n", sc_size, argv[1]);
 
-    /* Resolve config offsets: header > runtime scan. Header values are
-     * baked at runner build time and describe that binary — if the
-     * payload being run doesn't carry the default sentinel there, fall
-     * back to a scan so foreign payloads patch correctly too. */
+    /* Resolve config offsets: runtime header (paired by size) > baked
+     * header constants (only if the default sentinel backs them) >
+     * sentinel scan. */
     int ip_off   = CONFIG_IP_OFFSET;
     int port_off = CONFIG_PORT_OFFSET;
 
-    if (ip_off >= 0 && port_off >= 0 &&
-        !default_config_at(sc, sc_size, ip_off, port_off)) {
-        fprintf(stderr,
-                "[!] Header offsets don't match this payload — scanning\n");
-        ip_off = port_off = -1;
-    }
-
-    if ((ip_off < 0 || port_off < 0) &&
-        !scan_offsets(sc, sc_size, &ip_off, &port_off)) {
-        /* Encoded artifacts hide the config sentinel by design */
-        if (argc == 4) {
+    if (header_offsets_for(argv[1], sc_size, &ip_off, &port_off)) {
+        /* runtime header won — offsets already validated against size */
+    } else {
+        if (ip_off >= 0 && port_off >= 0 &&
+            !default_config_at(sc, sc_size, ip_off, port_off)) {
             fprintf(stderr,
-                "[-] Could not locate config offsets (patching requested).\n"
-                "[-] Build with 'make shellcode' first to generate shellcode.h,\n"
-                "[-] or use: python3 builder/patch_config.py <bin> --ip X --port Y\n"
-                "[-] Encoded artifacts (--encode xor) cannot be patched: regenerate.\n");
-            exit(1);
+                    "[!] Header offsets don't match this payload — scanning\n");
+            ip_off = port_off = -1;
         }
-        fprintf(stderr,
-            "[!] Config offsets not found (encoded artifact?) "
-            "— running embedded config unchanged.\n");
-    } else if (ip_off >= 0 && port_off >= 0 && argc == 2) {
-        fprintf(stderr, "[*] Config offsets found by scan: IP=%d PORT=%d\n",
-                ip_off, port_off);
+
+        if ((ip_off < 0 || port_off < 0) &&
+            !scan_offsets(sc, sc_size, &ip_off, &port_off)) {
+            /* Encoded artifacts hide the config sentinel by design */
+            if (argc == 4) {
+                fprintf(stderr,
+                    "[-] Could not locate config offsets (patching requested).\n"
+                    "[-] Build with 'make shellcode' first to generate shellcode.h,\n"
+                    "[-] or use: python3 builder/patch_config.py <bin> --ip X --port Y\n"
+                    "[-] Encoded artifacts (--encode xor) cannot be patched: regenerate.\n");
+                exit(1);
+            }
+            fprintf(stderr,
+                "[!] Config offsets not found (encoded artifact?) "
+                "— running embedded config unchanged.\n");
+        } else if (ip_off >= 0 && port_off >= 0 && argc == 2) {
+            fprintf(stderr, "[*] Config offsets resolved: IP=%d PORT=%d\n",
+                    ip_off, port_off);
+        }
     }
 
     /* Patch IP and port if provided */
