@@ -328,13 +328,15 @@ _wait_cqe_ok:
     ret
 
 _exit_ok:
-    xor edi, edi                     ; op5 success falls through here: exit(0)
+    xor edi, edi                     ; op5 success lands here: status 0
 _exit:
+    push rdi                         ; park the exit status across close()
     mov edi, [r13 + S_URFD]          ; close(io_uring fd): signal the SQPOLL
     push 0x3                         ; thread's teardown — without it the
     pop rax                          ; group exit can stall on the ring's
     syscall                          ; borrowed-mm kthread bookkeeping
-    xor edi, edi                     ; exit status 0 (or 1 if _fail set it)
+    pop rdi                          ; restore status (0 ok / 1 _fail) —
+                                     ; mov edi,[S_URFD] clobbered it
     push 0xE7
     pop rax                          ; SYS_exit_group = 231 — NOT 232
                                      ; (0xE8 is epoll_wait; the old value
