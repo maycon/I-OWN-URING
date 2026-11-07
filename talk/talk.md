@@ -187,9 +187,11 @@ A limitação: precisa de privilégio, ou de um kernel 5.11+ onde o `CAP_SYS_NIC
 
 ## S18 · PoC Results · 2:00
 
-Testado no kernel 6.14.0, aqui estão os resultados. Lado esquerdo, shellcode tradicional de exfiltração: quatro syscalls de I/O no strace — `openat`, `read`, `write`, `close`. Lado direito, io_uring: `io_uring_setup`, dois mmaps, cinco `io_uring_enter`. Nenhum `openat`, `read`, `connect` ou `send` visível.
+Testado no kernel 6.14.0, aqui estão os resultados. Lado esquerdo, shellcode tradicional de exfiltração: quatro syscalls de I/O no strace — `openat`, `read`, `write`, `close`. Lado direito, a variante SQPOLL: `io_uring_setup` com `entries=1`, dois mmaps — 4096 bytes do ring combinado e **64 bytes** de SQE, um só entry —, um único `io_uring_enter(SQ_WAKEUP)` para acordar a thread que nasce estacionada, `close`, e `exit_group(0)`. **Seis syscalls no total. Nenhuma com semântica de I/O.**
 
-O `/etc/shadow` foi lido, conectou no C2, os dados chegaram. E o EDR que monitora `sys_enter` não viu nada além de um processo que usou io_uring.
+O `/etc/shadow` foi lido, conectou no C2, os dados chegaram byte a byte — validado por hash. E a fase de I/O inteira — openat, read, socket, connect, send — rodou em memória compartilhada, sem cruzar o `sys_enter` uma única vez.
+
+Na demo ao vivo eu vou rodar a variante clássica (cinco `io_uring_enter`, um por operação) porque ela dá pra acompanhar enter por enter em tempo real — a SQPOLL vocês acabaram de ver: a missão inteira caberia num post-it de seis linhas.
 
 ---
 
