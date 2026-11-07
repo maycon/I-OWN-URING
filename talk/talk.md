@@ -69,7 +69,7 @@ O io_uring foi criado pelo Jens Axboe para resolver um problema legítimo de per
 
 Você faz o setup uma vez, mapeia as regiões de memória, e a partir daí submete operações escrevendo diretamente nos rings. O kernel processa internamente e devolve os resultados pelo mesmo canal.
 
-Cronologicamente: `CONNECT` chegou no kernel 5.5, `OPENAT` e `READ` e `SEND` no 5.6, e `SOCKET` no 5.19. A partir do kernel 5.19 você tem tudo que precisa para uma missão completa de exfiltração sem um único `openat()` ou `connect()` visível.
+Cronologicamente: `CONNECT` chegou no kernel 5.5, `OPENAT` e `READ` e `SEND` no 5.6, `SOCKET` no 5.19 — e a partir do 5.11 o SQPOLL funciona sem `CAP_SYS_NICE`. A partir do kernel 5.19 você tem tudo que precisa para uma missão completa de exfiltração sem um único `openat()` ou `connect()` visível.
 
 ---
 
@@ -97,7 +97,7 @@ O kernel retorna o resultado no CQE, no campo `res`. Positivo é sucesso, negati
 
 Aqui estão os opcodes relevantes com a versão mínima de kernel pra cada um. O ponto importante é que a versão que importa para a missão completa é o 5.19, quando o `IORING_OP_SOCKET` foi adicionado.
 
-Se você tiver um alvo com kernel entre 5.6 e 5.18, você ainda consegue fazer openat e read via io_uring, mas vai precisar de um socket por syscall direta. Compatibilidade importa — o builder verifica isso automaticamente via `requires_kernel`.
+Se você tiver um alvo com kernel entre 5.6 e 5.18, você ainda consegue fazer openat e read via io_uring, mas vai precisar de um socket por syscall direta. Compatibilidade importa — o builder avisa isso no build via `requires_kernel`, e os PoCs checam a versão do kernel em runtime com `uname()`.
 
 ---
 
@@ -105,7 +105,7 @@ Se você tiver um alvo com kernel entre 5.6 e 5.18, você ainda consegue fazer o
 
 *[pausa ao mostrar o slide]*
 
-Do lado esquerdo: o que o EDR registra. O log do `sys_enter`. `io_uring_setup`. Três `mmap`. Um único `io_uring_enter` submetendo todas as operações de uma vez. `close`. Fim do log. Processo limpo.
+Do lado esquerdo: o que o EDR registra. O log do `sys_enter`. `io_uring_setup`. Dois `mmap`. Depois cinco `io_uring_enter`, um por operação — o slide anota ao lado de cada um qual operação ele esconde. `close`. Fim do log. Processo limpo.
 
 Do lado direito: o que realmente aconteceu dentro daquele `io_uring_enter`.
 
@@ -175,11 +175,11 @@ Com `IOSQE_IO_LINK`, você encadeia as cinco SQEs e submete tudo em um único `i
 
 ## S17 · SQPOLL · 1:30
 
-Existe um modo ainda mais extremo: SQPOLL. Com a flag `IORING_SETUP_SQPOLL`, o kernel spawna uma thread dedicada que fica polling o SQ ring. Após o setup, você escreve diretamente no ring e incrementa o tail. Sem `io_uring_enter`.
+Existe um modo ainda mais extremo: SQPOLL. Com a flag `IORING_SETUP_SQPOLL`, o kernel spawna uma thread dedicada que fica polling o SQ ring. Após o setup, você escreve diretamente no ring e incrementa o tail. Na fase de I/O, sem `io_uring_enter` — com uma exceção honesta: em kernels modernos a thread SQPOLL nasce estacionada, então logo após o setup é preciso um único `io_uring_enter` com a flag `SQ_WAKEUP` para acordá-la. Um wake por vida do ring; depois disso, memória pura.
 
-Depois do bootstrap, zero syscalls de I/O. Completamente invisível até para quem monitora o `io_uring_enter`.
+Depois do bootstrap e do wake, zero syscalls de I/O. Completamente invisível até para quem monitora o `io_uring_enter`.
 
-A limitação: precisa de privilégio, ou de um kernel 5.11+ onde o `CAP_SYS_NICE` não é mais necessário. Ubíquo em servidores modernos com kernel 6.x. Para ambientes containerizados é o modo ideal.
+A limitação: precisa de privilégio, ou de um kernel 5.11+ onde o `CAP_SYS_NICE` não é mais necessário. Ubíquo em servidores modernos com kernel 6.x. É o modo ideal onde o io_uring está disponível — lembrando que containers com seccomp default bloqueiam o `io_uring_setup` inteiro.
 
 ---
 
@@ -197,7 +197,7 @@ A tabela resume o que testamos. Ferramentas baseadas em `sys_enter` — a maiori
 
 Ferramentas com LSM hooks detectam porque `security_file_open` dispara dentro do VFS independentemente de como a operação chegou lá.
 
-CrowdStrike e Elastic ficam no amarelo porque dependem de configuração e versão. Testate no seu ambiente antes de assumir cobertura.
+CrowdStrike e Elastic ficam no amarelo porque dependem de configuração e versão. Teste no seu ambiente antes de assumir cobertura.
 
 seccomp negando `io_uring_setup` é o bloqueio mais simples e mais efetivo disponível hoje.
 
