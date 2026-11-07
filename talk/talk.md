@@ -291,3 +291,11 @@ Obrigado. Perguntas?
 
 *[referência para perguntas frequentes na tela]*
 
+*Preparação para as três da tela:*
+
+**"SELinux enforcing?"** — O SELinux mora na camada que nos vê: LSM dispara no VFS independente do caminho. Domínio confinado + política negando → openat via uring é bloqueado **e** auditado (AVC denial no log). Unconfined/targeted default → funciona, mas aí a política também não bloquearia via syscall. *"If your policy would block it via syscall, it blocks it via io_uring too."*
+
+**"Docker?"** — Profile default: `io_uring_setup` → **EPERM**, a técnica morre no bootstrap (mostrado ao vivo). A exposição real é a distância entre "default" e "o que está aplicado": `--privileged`, `seccomp=unconfined`, perfis custom, pods hostPID, ou injetar num processo do host. Por isso seccomp é a recomendação nº 1 — é a defesa que já vem ligada.
+
+**"Windows?"** — Não, e não é port: o IOCP é async na API, mas cada op ainda cruza o boundary por uma syscall visível (`NtCreateFile`, `NtReadFile`) — não existe fila de submissão em memória compartilhada, que é o coração do io_uring. E minifilters/kernel callbacks veem todo IRP independente da origem: o modelo "cego ao sys_enter" não se aplica lá.
+
