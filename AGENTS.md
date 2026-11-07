@@ -31,7 +31,7 @@ constraints, register conventions, and quality criteria.
    (IP, port, path), document their offsets in a header comment and
    generate a `.h` file with `#define` macros.
 
-7. **Kernel version guards.** Code that requires kernel ≥ 5.5 (CONNECT/SEND)
+7. **Kernel version guards.** Code that requires kernel ≥ 5.5 (CONNECT) or ≥ 5.6 (SEND/OPENAT/READ)
    or ≥ 5.11 (SQPOLL without CAP_SYS_NICE) must check at runtime via
    `uname()` and print a clear error if the requirement isn't met.
 
