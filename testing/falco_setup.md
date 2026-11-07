@@ -11,7 +11,12 @@ what survives.
 ## TL;DR
 
 Runs validated with falco **0.45.1 default config only** (no custom
-ruleset, target executed inside the falco container):
+ruleset, target executed inside the falco container). Re-validated
+unchanged on **0.45.2** (2026-10-29, current latest) on kernel 6.14:
+same 3/0/0 rows, no other default rule fired, and the stock ruleset
+still ships no io_uring-aware rule (the ≥0.38 "io_uring support" in
+libs/driver is parsing-only — the fd↔socket attribution gap that
+blinds the dup2 heuristic persists):
 
 | variant (`docker exec flk /lab/runner /lab/<blob>.bin`) | stock falco rules |
 |---|---|
