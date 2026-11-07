@@ -171,7 +171,7 @@ A missão faz exatamente cinco operações, todas via io_uring. A primeira é um
 
 No meio, socket e connect. No final, `IORING_OP_SEND` com o buffer e o número de bytes que o read retornou.
 
-Com `IOSQE_IO_LINK`, você encadeia as cinco SQEs e submete tudo em um único `io_uring_enter` — se qualquer operação falha, as downstream são canceladas. Na PoC fazemos cinco `io_uring_enter` separados por simplicidade, mas o resultado é o mesmo: zero `openat`, zero `read`, zero `connect`, zero `send` no strace.
+Com `IOSQE_IO_LINK`, você encadeia SQEs e submete em um único `io_uring_enter` — se qualquer operação falha, as downstream são canceladas com `-ECANCELED`. Mas atenção: LINK é ordenação, não fluxo de dados — os campos das SQEs são congelados no submit. Pra encadear openat→read de verdade é preciso **direct descriptors** (`file_index`, kernel 5.15+/5.19+): o openat instala o arquivo num slot da tabela privada do ring que você escolhe no submit, então o "fd" vira constante. E o `len` do send (que depende de `bytes_read`) só se resolve com `splice` (move o que existir até EOF) — ou batching parcial: socket+connect+openat são independentes entre si e cabem num enter só. Na PoC fazemos cinco `io_uring_enter` separados por simplicidade, mas o resultado é o mesmo: zero `openat`, zero `read`, zero `connect`, zero `send` no strace.
 
 ---
 
