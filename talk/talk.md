@@ -115,6 +115,8 @@ Do lado direito: o que realmente aconteceu dentro daquele `io_uring_enter`.
 
 Seis operações de I/O. Zero syscalls individuais de I/O visíveis. O EDR sabe que o processo usou io_uring. Não sabe o que ele fez.
 
+*(se perguntarem "por que cinco enters e não um só"): as operações têm dependência de dados — o `fd` do openat alimenta o read, o `sock_fd` alimenta o connect e o send, os bytes lidos viram o `len` do send. Cada enter é submit-um-espera-um: é o mecanismo de sincronização do runtime. Comprimir num único enter exigiria direct descriptors com linked SQEs (kernel 5.15+/5.19+, roadmap do repo). E do ponto de vista do EDR não muda nada: o número de enters não revela quantas operações cada um carrega.*
+
 Isso não é um bypass de evasão. Isso é uma lacuna arquitetural no modelo de detecção. O EDR está monitorando a entrada correta, mas as operações nunca passam por lá.
 
 *[pausa longa]*
