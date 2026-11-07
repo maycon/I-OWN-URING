@@ -215,15 +215,7 @@ A mais drástica: `kernel.io_uring_disabled=2` desabilita io_uring no sistema in
 
 ---
 
-## S21 · Schema · 1:30
-
-E isso aqui é tudo que você precisa para definir uma missão. Um YAML com o C2, e a sequência de operações. O builder resolve o resto: qual SQE corresponde a cada op, como os resultados fluem entre elas, onde ficam os offsets de IP e porta no binário final.
-
-A missão completa de exfiltração do shadow cabe em vinte linhas. O builder gera um `shellcode.bin` pronto pra injetar e um `shellcode.h` com os offsets patcháveis.
-
----
-
-## S22 · Release · 1:30
+## S21 · Release · 1:30
 
 E com isso, vou anunciar que o repositório está público agora.
 
@@ -232,6 +224,14 @@ I-OWN-U-RING. Framework completo: shellcode em x64, builder YAML, framework de t
 O que eu quero da comunidade: uma variante abaixo de 500 bytes usando SQPOLL, um port pra ARM64, e expansão da matriz com EDRs comerciais que vocês testarem.
 
 `github.com/maycon/i-own-u-ring`
+
+---
+
+## S22 · Schema · 1:30
+
+Do que o framework é feito, a peça central é essa: tudo que você precisa para definir uma missão. Um YAML com o C2, e a sequência de operações. O builder resolve o resto: qual SQE corresponde a cada op, como os resultados fluem entre elas, onde ficam os offsets de IP e porta no binário final.
+
+A missão completa de exfiltração do shadow cabe em vinte linhas. O builder gera um `shellcode.bin` pronto pra injetar e um `shellcode.h` com os offsets patcháveis.
 
 ---
 
