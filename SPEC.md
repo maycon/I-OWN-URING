@@ -98,7 +98,8 @@ Includes a spin-loop CQE poller with 5ms timeout.
 - **No null bytes** in the final binary (important for injection contexts).
   The raw payload may still contain nulls (ptrace injection is agnostic);
   deliver via `uring_builder.py --encode xor` for a null-free artifact.
-- **Kernel ≥ 5.5** required for `IORING_OP_CONNECT` / `IORING_OP_SEND`.
+- **Kernel ≥ 5.6** required for `IORING_OP_SEND` (+ `OPENAT`/`READ`/`WRITE`/`CLOSE`);
+  `IORING_OP_CONNECT` since 5.5; `IORING_OP_SOCKET` since 5.19.
 - Assembled with NASM (`nasm -f bin`).
 - Each layer is assembled independently and concatenated.
 

@@ -121,7 +121,7 @@ uring-shellcode/
 
 ## Requirements
 
-- Linux x86_64, kernel ≥ 5.5 (for `IORING_OP_CONNECT` / `IORING_OP_SEND`)
+- Linux x86_64, kernel ≥ 5.6 (for `IORING_OP_CONNECT` 5.5 / `IORING_OP_SEND`, `OPENAT`, `READ`; `IORING_OP_SOCKET` needs 5.19)
 - NASM ≥ 2.14
 - Python ≥ 3.9 (`pip install pyyaml`)
 - GCC (for injector and C PoCs)
