@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc make nasm python3-pytest python3-yaml
+
+      - name: Build C and assembly targets
+        run: make --jobs=2
+
+      - name: Run builder tests
+        run: python3 -m pytest builder/tests/ -q
+
+      - name: Run non-privileged smoke checks
+        run: |
+          make demo
+          make -C testing check
+
+      - name: Verify null-free encoded missions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/i-own-uring-ci
+          for mission in builder/missions/*.yaml; do
+            name="$(basename "$mission" .yaml)"
+            python3 builder/uring_builder.py "$mission" \
+              --encode xor \
+              --out "/tmp/i-own-uring-ci/${name}.bin" \
+              --header "/tmp/i-own-uring-ci/${name}.h" \
+              --quiet
+            python3 shellcode/combined/extract.py \
+              "/tmp/i-own-uring-ci/${name}.bin" --no-array \
+              | grep -F "Null bytes: 0 — PASS"
+          done
