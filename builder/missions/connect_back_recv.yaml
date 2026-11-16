@@ -6,7 +6,7 @@ description: >
   line, the shellcode opens it, streams its contents back in
   4096-byte chunks until EOF, closes the file and waits for the next
   path. Clearing the connection ends the mission.
-requires_kernel: "5.6"
+requires_kernel: "5.19"
 
 config:
   c2_ip:   "127.0.0.1"

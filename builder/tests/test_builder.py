@@ -61,6 +61,7 @@ class TestMissionLoading:
         m = builder.load_mission(BUILDER_DIR / 'missions/exfil_shadow.yaml')
         assert m['name'] == 'exfil_shadow'
         assert len(m['ops']) == 6
+        assert m['requires_kernel'] == '5.19'
         assert m['config']['c2_ip'] == '127.0.0.1'
         assert m['config']['c2_port'] == 4444
 
@@ -75,6 +76,7 @@ class TestMissionLoading:
         m = builder.load_mission(BUILDER_DIR / 'missions/connect_back_recv.yaml')
         assert m['name'] == 'connect_back_recv'
         assert len(m['ops']) == 3
+        assert m['requires_kernel'] == '5.19'
         assert list(m['ops'][2]) == ['file_exfil_service']
 
     def test_override_ip(self):
@@ -91,10 +93,27 @@ class TestMissionLoading:
 
     def test_unknown_op_raises(self, tmp_path):
         bad_yaml = tmp_path / 'bad.yaml'
-        bad_yaml.write_text("name: bad\nops:\n  - frobulate:\n      x: 1\n")
+        bad_yaml.write_text(
+            "name: bad\nrequires_kernel: '5.1'\nops:\n"
+            "  - frobulate:\n      x: 1\n"
+        )
         m = builder.load_mission(bad_yaml)
         with pytest.raises(ValueError, match="Unknown opcode 'frobulate'"):
             builder.render_layer2(m)
+
+    def test_missing_kernel_requirement_raises(self, tmp_path):
+        bad_yaml = tmp_path / 'bad.yaml'
+        bad_yaml.write_text("name: bad\nops:\n  - socket: {}\n")
+        with pytest.raises(ValueError, match='missing requires_kernel'):
+            builder.load_mission(bad_yaml)
+
+    def test_kernel_requirement_covers_socket_opcode(self, tmp_path):
+        bad_yaml = tmp_path / 'bad.yaml'
+        bad_yaml.write_text(
+            "name: bad\nrequires_kernel: '5.6'\nops:\n  - socket: {}\n"
+        )
+        with pytest.raises(ValueError, match='socket needs >= 5.19'):
+            builder.load_mission(bad_yaml)
 
 
 class TestVariableResolution:

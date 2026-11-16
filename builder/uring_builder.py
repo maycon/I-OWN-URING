@@ -51,6 +51,57 @@ FRAME_SOCKADDR = 'F_SADDR'
 # ----------------------------------------------------------------
 # Mission parsing
 # ----------------------------------------------------------------
+OP_MIN_KERNEL: dict[str, tuple[int, int]] = {
+    'openat': (5, 6),
+    'read': (5, 6),
+    'socket': (5, 19),
+    'connect': (5, 5),
+    'send': (5, 6),
+    'recv': (5, 6),
+    'close': (5, 11),
+    'read_send': (5, 6),
+    'file_exfil_service': (5, 11),
+}
+
+
+def parse_kernel_version(value: str) -> tuple[int, int]:
+    """Parse a mission kernel floor such as ``5.19``."""
+    match = re.fullmatch(r'(\d+)\.(\d+)', str(value).strip())
+    if not match:
+        raise ValueError(
+            f"Invalid requires_kernel value {value!r}; expected MAJOR.MINOR"
+        )
+    return int(match.group(1)), int(match.group(2))
+
+
+def validate_kernel_requirement(mission: dict) -> None:
+    """Ensure mission metadata covers every io_uring opcode it emits."""
+    required = (5, 1)
+    requiring_op = 'io_uring base'
+
+    for entry in mission['ops']:
+        if not isinstance(entry, dict) or len(entry) != 1:
+            raise ValueError('Each mission op must contain exactly one opcode')
+        op_name = next(iter(entry))
+        op_floor = OP_MIN_KERNEL.get(op_name)
+        if op_floor and op_floor > required:
+            required = op_floor
+            requiring_op = op_name
+
+    declared_raw = mission.get('requires_kernel')
+    if declared_raw is None:
+        raise ValueError(
+            f"Mission missing requires_kernel; {requiring_op} needs "
+            f">= {required[0]}.{required[1]}"
+        )
+    declared = parse_kernel_version(declared_raw)
+    if declared < required:
+        raise ValueError(
+            f"Mission requires_kernel {declared_raw} is too low: "
+            f"{requiring_op} needs >= {required[0]}.{required[1]}"
+        )
+
+
 def load_mission(path: Path) -> dict:
     raw = yaml.safe_load(path.read_text())
     required = ['name', 'ops']
@@ -61,6 +112,7 @@ def load_mission(path: Path) -> dict:
         raw['config'] = {}
     raw['config'].setdefault('c2_ip',   '127.0.0.1')
     raw['config'].setdefault('c2_port', 4444)
+    validate_kernel_requirement(raw)
     return raw
 
 def apply_overrides(mission: dict, ip: str | None, port: int | None) -> None:

