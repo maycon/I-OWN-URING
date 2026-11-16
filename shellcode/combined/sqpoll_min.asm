@@ -7,8 +7,9 @@
 ; the CQ ring. **Zero io_uring_enter() calls in the I/O phase.**
 ;
 ; Mission: minimal exfil — openat → read (≤3840) → socket → connect →
-; send. Hand-rolled (no dispatcher, no chunk loop, no close teardown) to
-; fit the ≤500-byte budget. Sequential ops, one entry in flight →
+; send. Hand-rolled (no dispatcher, no chunk loop, no close teardown). The
+; current build is 503 bytes; ROADMAP #1 tracks the remaining reduction to
+; ≤500 bytes. Sequential ops, one entry in flight →
 ; entries=1: the SQ mask is structurally 0 (the operating SQE is always
 ; index 0), but the kernel forces cq_entries=2 → cq mask is 1, so CQEs
 ; alternate slots 0/1 and the waiter selects by (head & mask). Most ring
@@ -25,9 +26,11 @@
 ; submit/wait completes purely in shared memory. Steady I/O phase: zero
 ; enter syscalls; strace shows only setup + 2× mmap + 1 wake.
 ;
-; Requires kernel ≥ 5.11 (SQPOLL without CAP_SYS_NICE: io_uring_setup
-; returns -EACCES → exit(1) via _fail) and a single combined ring mapping
-; (IORING_FEAT_SINGLE_MMAP — universal on ≥5.11): with one mapping, cq_off
+; Requires kernel ≥ 5.19 overall because the mission uses IORING_OP_SOCKET.
+; SQPOLL itself works without CAP_SYS_NICE from 5.11 onward (on older kernels,
+; io_uring_setup returns -EACCES → exit(1) via _fail). Also requires a single
+; combined ring mapping (IORING_FEAT_SINGLE_MMAP — universal on ≥5.11): with
+; one mapping, cq_off
 ; fields are offsets into the SAME base as the SQ ring (no
 ; +IORING_OFF_CQ_RING addition). C twin: poc/sqpoll_uring.c.
 ;

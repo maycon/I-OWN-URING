@@ -1,10 +1,18 @@
-# uring-shellcode
+# I-OWN-URING
 
-Linux EDRs that rely on `sys_enter` tracepoints are completely blind to I/O operations routed through io_uring — and this repository proves it with working shellcode.
+Research toolkit accompanying the talk **“What EDRs Don't See: Syscall-less
+Shellcode via io_uring.”** It demonstrates, with working x86_64 shellcode, why
+Linux monitoring that relies only on `sys_enter` cannot observe the individual
+I/O operations submitted through io_uring.
+
+[![CI](https://github.com/maycon/I-OWN-URING/actions/workflows/ci.yml/badge.svg)](https://github.com/maycon/I-OWN-URING/actions/workflows/ci.yml)
 
 ## How it works
 
-io_uring submits I/O through `io_issue_sqe()` → `vfs_read()` directly, never touching the `raw_tracepoint/sys_enter` hook that most EDRs instrument. The only syscall an EDR ever sees is a generic `io_uring_enter(fd, N, N, GETEVENTS)`.
+io_uring submits I/O through internal kernel paths such as
+`io_issue_sqe()` → VFS/network helpers. An observer attached only to
+`raw_tracepoint/sys_enter` sees the generic ring-management syscalls, not an
+`openat`, `read`, `connect`, or `send` event with the operation's operands.
 
 ```
 Traditional I/O   →  EDR sees: openat()  read()  connect()  send()
@@ -37,6 +45,10 @@ sleep 60 &
 sudo testing/injector/inject $! shellcode.bin
 ```
 
+The bundled network missions use `IORING_OP_SOCKET` and therefore require
+Linux kernel **5.19 or newer**. Run only on systems you own or are explicitly
+authorized to test.
+
 strace on the target will show zero `openat`, `read`, `connect`, or `send` calls. The file arrives at the C2.
 
 ## Detection Matrix
@@ -46,10 +58,10 @@ For the full per-mechanism results table, run `sudo testing/run_matrix.sh`
 
 | Detection mechanism | Detects? |
 |---|:---:|
-| eBPF on `sys_enter` (Falco, most EDRs) | ✗ |
+| eBPF on `sys_enter` only (Falco default rules tested) | ✗ |
 | kprobes on `sys_read` / `sys_openat`   | ✗ |
-| LSM hooks (`security_file_open`)       | ✓ |
-| Falcon Linux kernel sensor             | ⚠ version-dependent |
+| LSM hooks (`security_file_open`)       | ✓ by design; live validation pending |
+| Commercial EDR sensors                 | ⚠ not validated in this repository |
 | seccomp blocking `io_uring_setup`      | ✓ |
 
 Run `sudo testing/run_matrix.sh` to reproduce with your EDR stack — it
@@ -95,7 +107,7 @@ uvx asciinema play testing/results/falco_demo.cast   # ~90 s, 190x40
 ## Repository Structure
 
 ```
-uring-shellcode/
+I-OWN-URING/
 ├── shellcode/
 │   ├── combined/shellcode.asm   # Combined bootstrap + runtime + mission
 │   ├── layer1_runtime.asm       # SQE/CQE engine (for builder)
@@ -113,24 +125,26 @@ uring-shellcode/
 │   ├── falco_demo.sh            # scripted tmux demo driver (asciinema + live log)
 │   ├── run_falco_poc.sh         # build + listener + runner helper
 │   ├── falco_reverse_sh_poc.yaml# PoC ruleset (POC_REVSHELL)
-│   └── results/                 # generated: edr_matrix.md + captured falco_edr_comparison.md
-│                                 # + pre-recorded falco_demo.cast (uvx asciinema play)├── poc/                         # Standalone C PoCs (no assembly)
+│   └── results/                 # generated matrix + captured Falco evidence
+├── poc/                         # Standalone C PoCs (no assembly)
+├── paper/writeup.md             # Technical paper
 ├── SPEC.md                      # Full technical specification
 └── AGENTS.md                    # Claude Code / Codex agent instructions
 ```
 
 ## Requirements
 
-- Linux x86_64, kernel ≥ 5.6 (for `IORING_OP_CONNECT` 5.5 / `IORING_OP_SEND`, `OPENAT`, `READ`; `IORING_OP_SOCKET` needs 5.19)
+- Linux x86_64, kernel ≥ 5.19 for the bundled network missions
+  (`IORING_OP_CONNECT` appeared in 5.5; `SEND`/`RECV` in 5.6;
+  `IORING_OP_SOCKET` in 5.19)
 - NASM ≥ 2.14
-- Python ≥ 3.9 (`pip install pyyaml`)
+- Python ≥ 3.9 with PyYAML and pytest
 - GCC (for injector and C PoCs)
 - Root / `CAP_SYS_PTRACE` for injection tests
 
 Install on Debian/Ubuntu:
 ```bash
-sudo apt install nasm gcc python3-pip
-pip install pyyaml pytest
+sudo apt install nasm gcc make python3-yaml python3-pytest
 ```
 
 ## Phases
@@ -141,6 +155,14 @@ pip install pyyaml pytest
 - [x] Phase 4 — DSL builder: YAML mission → shellcode.bin + C header
 - [x] Phase 5 — Testing framework: ptrace injector + C2 server + EDR matrix
 - [ ] Phase 6 — Additional missions and ARM64 port (see ROADMAP)
+
+## Research material
+
+- [Technical paper](paper/writeup.md)
+- [Falco reproduction guide](testing/falco_setup.md)
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). For private
+security reports, follow [SECURITY.md](SECURITY.md).
 
 ## Disclaimer
 

@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this research, please cite the repository and technical write-up."
+title: "I-OWN-URING: Syscall-less Shellcode via Linux io_uring"
+type: software
+authors:
+  - family-names: Vitali
+    given-names: Maycon
+    alias: maycon
+repository-code: "https://github.com/maycon/I-OWN-URING"
+url: "https://github.com/maycon/I-OWN-URING"
+license: MIT
+abstract: >-
+  An x86_64 research toolkit demonstrating that Linux monitoring attached only
+  to sys_enter cannot observe individual file and network operations submitted
+  through io_uring. It includes raw-syscall PoCs, shellcode, a YAML mission
+  builder, defensive analysis, and a reproducible Falco evaluation.
+keywords:
+  - io_uring
+  - Linux
+  - shellcode
+  - EDR
+  - eBPF
+  - security research

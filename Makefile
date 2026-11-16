@@ -1,4 +1,4 @@
-# uring-shellcode — top-level Makefile
+# I-OWN-URING — top-level Makefile
 #
 # Targets:
 #   make           Build everything (poc, shellcode, injector)
@@ -79,7 +79,7 @@ clean:
 # ----------------------------------------------------------------
 help:
 	@echo ""
-	@echo "uring-shellcode — io_uring EDR evasion research"
+	@echo "I-OWN-URING — io_uring EDR evasion research"
 	@echo ""
 	@echo "Targets:"
 	@printf "  %-18s %s\n" "make"          "Build PoCs + shellcode + injector"

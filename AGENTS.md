@@ -21,11 +21,16 @@ constraints, register conventions, and quality criteria.
    `call get_ip / pop rbx / sub $get_ip, rbx` delta technique, then
    `lea symbol(%rbx+offset), %rax` style addressing.
 
-4. **No null bytes** in assembled shellcode. If a null appears, use
-   `xor rax, rax` instead of `mov rax, 0`, etc.
+4. **Null-free delivery artifacts.** Raw length-aware ptrace payloads may
+   contain null bytes. Artifacts intended for null-terminated injection must
+   be generated with `uring_builder.py --encode xor` and verified null-free.
+   Avoid unnecessary encoding nulls in handwritten assembly (`xor rax, rax`
+   instead of `mov rax, 0`, etc.).
 
-5. **Test before marking done.** Every C file must compile and run.
-   Every .asm file must assemble. The builder must produce valid output.
+5. **Test before marking done.** Every C program must compile and run on a
+   host where io_uring is permitted. Standalone `.asm` targets must assemble;
+   files documented as include/reference fragments are validated through the
+   combined target or builder. The builder must produce valid output.
 
 6. **Document offsets.** When a shellcode has runtime-configurable values
    (IP, port, path), document their offsets in a header comment and

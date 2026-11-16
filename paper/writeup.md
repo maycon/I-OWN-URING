@@ -1,37 +1,40 @@
 # Syscall-less Shellcode via Linux io_uring: EDR Evasion at the I/O Layer
 
-**Author:** Maycon Vitali (@maycon)  
-**Affiliation:** Hack N' Roll  
-**Date:** October 2026  
-**Repository:** https://github.com/maycon/uring-shellcode  
+**Author:** Maycon Vitali (@maycon)
+
+**Affiliation:** Hack N' Roll
+
+**Date:** November 2026
+
+**Repository:** https://github.com/maycon/I-OWN-URING
 
 ---
 
 ## Abstract
 
 We present a technique for performing file and network I/O operations from
-shellcode without emitting the traditional syscalls monitored by most Linux
-Endpoint Detection and Response (EDR) solutions. By routing all I/O through
+shellcode without emitting the traditional operation-specific syscalls seen by
+Linux monitoring attached only to `sys_enter`. By routing all I/O through
 the Linux `io_uring` interface, a shellcode can open files, read their
 contents, create sockets, connect to a remote host, and exfiltrate data while
 generating no `openat()`, `read()`, `connect()`, or `send()` syscall events
 visible to `sys_enter`-based monitoring tools. We demonstrate this with a
 working x86_64 position-independent shellcode (~1036 bytes), a mission DSL
-builder, and a reproducible test matrix against open-source and commercial
-EDR tools.
+builder, and a reproducible test matrix with live Falco validation. Commercial
+EDR validation remains future work and is not claimed by this repository.
 
 ---
 
 ## 1. Introduction
 
-Modern Linux EDRs attach to the kernel's syscall interface to detect malicious
-I/O activity. The standard mechanism is a BPF program or kernel module attached
-to the `raw_tracepoint/sys_enter` hook, which fires on every syscall entry.
+Some Linux monitoring designs attach to the kernel's syscall interface to
+detect malicious I/O activity. One mechanism is a BPF program or kernel module
+attached to the `raw_tracepoint/sys_enter` hook, which fires on every syscall entry.
 When a process calls `openat("/etc/shadow", O_RDONLY)`, the hook fires, the
 EDR inspects the filename, and may generate an alert.
 
 This model has a structural weakness: it assumes that I/O operations are
-operations are initiated through the syscall interface. The Linux `io_uring` subsystem,
+initiated through the syscall interface. The Linux `io_uring` subsystem,
 merged into the mainline kernel in 5.1 (May 2019), provides an asynchronous I/O
 mechanism
 that uses shared memory rings between userspace and the kernel. After a one-time
@@ -264,9 +267,9 @@ log streaming, `testing/results/falco_demo.cast`) and a raw-rows capture
 | strace (default) | sys_enter tracing | ✗ |
 | Falco 0.45.1, *live-validated* (default rules) | eBPF on sys_enter | ✗ |
 | Falco (io_uring event types, custom rules) | rules referencing `io_uring_setup` | ⚠ setup only |
-| Tetragon (default) | eBPF + kprobes | ✗ |
+| Tetragon (default) | eBPF + kprobes | ⚠ not live-validated here |
 | Tetragon (LSM policy) | BPF LSM hooks | ✓ (design expectation, pending live validation) |
-| CrowdStrike Falcon (kernel sensor) | Mixed | ⚠ version-dependent |
+| Commercial EDR sensors | Product-dependent | ⚠ not validated here |
 | seccomp (deny `io_uring_setup`) | syscall filter | ✓ blocks entirely |
 
 Live-validated falco row: with **falco 0.45.1 `modern_ebpf` and the shipped
@@ -397,11 +400,11 @@ broader adoption.
 
 ## 8. Conclusion
 
-The `sys_enter` tracepoint model that most Linux EDRs rely on has a
-structural blind spot: operations submitted through io_uring bypass the
-syscall entry path and are invisible to this layer. We demonstrated this
-with a working shellcode that exfiltrates `/etc/shadow` to a remote host
-while generating no detectable file or network syscalls.
+The `sys_enter` tracepoint model has a structural blind spot: operations
+submitted through io_uring bypass the operation-specific syscall entry path
+and are invisible to this layer. We demonstrated this with a working shellcode
+that exfiltrates `/etc/shadow` while generating no traditional `openat`,
+`read`, `connect`, or `send` events at `sys_enter`.
 
 The correct defensive response is a shift to LSM-hook-based monitoring,
 which operates at the VFS and network layer rather than the syscall boundary.
@@ -409,7 +412,7 @@ Short-term, operators should restrict io_uring access in containerized
 workloads via seccomp.
 
 The source code, builder, and test framework are available at
-https://github.com/maycon/uring-shellcode under the MIT license.
+https://github.com/maycon/I-OWN-URING under the MIT license.
 
 ---
 

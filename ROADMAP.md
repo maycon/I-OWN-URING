@@ -21,10 +21,12 @@ Pick one, open a PR. Each has clear acceptance criteria.
 
 ### 1. Sub-500-byte SQPOLL variant
 
-Implement SQPOLL mode (`IORING_SETUP_SQPOLL`) in Layer 0 and produce a
-combined shellcode under 500 bytes. Current best is ~1040 bytes without SQPOLL.
-After setup, the process emits zero `io_uring_enter` calls — fully invisible
-to any sys_enter-based monitor.
+Reduce the existing SQPOLL mode (`IORING_SETUP_SQPOLL`) payload from **503
+bytes** to 500 bytes or less. The non-SQPOLL builder payload remains ~1040
+bytes. After its one conditional wake, the current SQPOLL implementation
+submits the mission through shared memory without further `io_uring_enter`
+calls. During steady-state I/O, the process emits zero `io_uring_enter` calls;
+the initial setup, mappings, and conditional SQPOLL wake remain visible.
 
 **Acceptance:** `python3 shellcode/combined/extract.py shellcode.bin` reports ≤ 500 bytes,
 `strace -c` shows 0 `io_uring_enter` calls during the I/O phase.

@@ -8,7 +8,7 @@ combined/shellcode.bin: combined/shellcode.asm
 	$(NASM) $(NASM_FLAGS) -o $@ $<
 	$(PYTHON) combined/extract.py $@ --no-array
 
-# ROADMAP #1 — SQPOLL zero-syscall variant (< 500 bytes, needs kernel >= 5.11)
+# ROADMAP #1 — 503-byte SQPOLL variant; goal <= 500 (kernel >= 5.19)
 combined/sqpoll_min.bin: combined/sqpoll_min.asm
 	$(NASM) $(NASM_FLAGS) -o $@ $<
 	$(PYTHON) combined/extract.py $@ --no-array
